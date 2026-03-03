@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+
+  redis:
+    image: redis:7
+    container_name: redis-nosql
+    ports: 
+      - "6379:6379"
+
+  mongo:
+    image: mongo:6
+    container_name: mongo-nosql
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+
+  scylla:
+    image: scylladb/scylla
+    container_name: scylla-nosql
+    ports:  
+      - "9042:9042"
+    command: --smp 1 --memory 750M --overprovisioned 1
+
+  neo4j:
+    image: neo4j:5
+    container_name: neo4j-nosql
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/password
