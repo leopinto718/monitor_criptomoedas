@@ -1,7 +1,3 @@
-Segue um modelo de **README.md em Markdown** pronto para copiar e colar no GitHub 👇
-
----
-
 # 📊 Plataforma de Inteligência de Mercado em Tempo Real
 
 ### 💾 Ecossistema NoSQL com Persistência Poliglota
