@@ -1,34 +1,32 @@
-# 📊 Plataforma de Inteligência de Mercado em Tempo Real
+#  Plataforma de Inteligência de Mercado em Tempo Real
 
-### 💾 Ecossistema NoSQL com Persistência Poliglota
+##  Ecossistema NoSQL com Persistência Poliglota
 
 Projeto desenvolvido para a disciplina **Banco de Dados NoSQL** com o objetivo de implementar uma arquitetura baseada em **Persistência Poliglota**, utilizando múltiplos bancos NoSQL para resolver diferentes tipos de problemas dentro do mesmo sistema.
 
 ---
 
-## 🚀 Visão Geral do Projeto
+#  Visão Geral do Projeto
 
-Este sistema monitora preços de criptomoedas em tempo real (Bitcoin e Ethereum) utilizando a API pública da Binance e distribui os dados em **quatro bancos NoSQL**, cada um com uma finalidade específica:
+O sistema monitora em tempo real os preços de:
 
-| Banco        | Função                                    |
-| ------------ | ----------------------------------------- |
-| **Redis**    | Cache de baixa latência                   |
-| **MongoDB**  | Data Lake (armazenamento bruto do JSON)   |
-| **ScyllaDB** | Série temporal otimizada                  |
-| **Neo4j**    | Rede de investidores e sistema de alertas |
+* **Bitcoin (BTCUSDT)**
+* **Ethereum (ETHUSDT)**
 
-O sistema roda continuamente e executa as seguintes etapas:
+Utilizando a API pública da Binance.
 
-1. 🔎 Verifica se o preço está no cache (Redis)
-2. 🌐 Se não estiver, consulta a API da Binance
-3. 🗄️ Salva o JSON bruto no MongoDB
-4. 📈 Insere o preço na série temporal (ScyllaDB)
-5. 🔔 Consulta no Neo4j quais investidores acompanham a moeda
-6. 📊 Exibe indicador visual de volatilidade
+Os dados são distribuídos entre **quatro bancos NoSQL**, cada um com responsabilidade específica:
+
+| Banco        | Função                                          |
+| ------------ | ----------------------------------------------- |
+| **Redis**    | Cache de baixa latência com TTL                 |
+| **MongoDB**  | Data Lake (armazenamento bruto do JSON da API)  |
+| **ScyllaDB** | Série temporal por moeda                        |
+| **Neo4j**    | Grafo de investidores e sistema de notificações |
 
 ---
 
-## 🏗️ Arquitetura do Sistema
+# 🏗️ Arquitetura do Sistema
 
 ```
                 ┌───────────────┐
@@ -49,23 +47,63 @@ O sistema roda continuamente e executa as seguintes etapas:
 
 ---
 
-## 💰 API Utilizada
+#  Arquitetura do Código (Modular)
 
-### Binance Public API (Mercado Cripto)
+O sistema foi estruturado com **separação de responsabilidades**, utilizando funções isoladas:
 
-* Bitcoin:
-  `https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT`
+###  Funções de Conexão
 
-* Ethereum:
-  `https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT`
+* `conectar_redis()`
+* `conectar_mongo()`
+* `conectar_scylla()`
+* `conectar_neo4j()`
 
-**TTL configurado no Redis:** `10 segundos`
+###  Setup do Grafo
+
+* `setup_grafo(driver, moedas)`
+
+###  Persistência
+
+* `salvar_mongo(collection, payload)`
+* `salvar_scylla(session, symbol, preco)`
+
+###  Regra de Negócio
+
+* `calcular_volatilidade(symbol, preco_atual, ultimos_precos)`
+* `investidores_para_notificar(driver, symbol)`
+
+###  Processamento
+
+* `processar_moeda(...)`
+* `main()`
 
 ---
 
-## 🗃️ Modelagem dos Bancos
+#  API Utilizada
 
-### 🔴 Redis (Cache)
+### Binance Public API
+
+* Bitcoin:
+
+  ```
+  https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT
+  ```
+
+* Ethereum:
+
+  ```
+  https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT
+  ```
+
+TTL configurado no Redis: **10 segundos**
+
+---
+
+#  Modelagem dos Bancos
+
+---
+
+## 🔴 Redis (Cache)
 
 * Chave: `BTCUSDT` ou `ETHUSDT`
 * Valor: preço atual
@@ -76,13 +114,16 @@ Implementa lógica de:
 * ✅ Cache Hit
 * ❌ Cache Miss
 
+Se houver Cache Hit, a API não é consultada.
+
 ---
 
-### 🟢 MongoDB (Data Lake)
+## 🟢 MongoDB (Data Lake)
 
 * Database: `mercado`
 * Collection: `cotações`
-* Documento salvo:
+
+Documento salvo:
 
 ```json
 {
@@ -92,11 +133,11 @@ Implementa lógica de:
 }
 ```
 
-Armazena o JSON bruto retornado pela API com timestamp adicional.
+Armazena o JSON retornado pela API com timestamp adicional.
 
 ---
 
-### 🔵 ScyllaDB (Série Temporal)
+## 🔵 ScyllaDB (Série Temporal)
 
 **Keyspace:** `mercado`
 
@@ -110,40 +151,44 @@ CREATE TABLE historico_precos(
 ```
 
 * Partition Key → `moeda`
-* Clustering Key → `data_coleta DESC`
+* Clustering Key → `data_coleta`
 * Otimizado para consultas por moeda ordenadas por data
 
 ---
 
-### 🟡 Neo4j (Grafo de Investidores)
+## 🟡 Neo4j (Grafo de Investidores)
 
-#### Nós:
+### Nós
 
 * `:Investidor`
 * `:Moeda`
 
-#### Relacionamento:
+### Relacionamento
 
-* `(:Investidor)-[:ACOMPANHA]->(:Moeda)`
+```
+(:Investidor)-[:ACOMPANHA]->(:Moeda)
+```
 
-Exemplo de consulta usada para notificação:
+### Atualização Automática
+
+Quando ocorre variação de preço, o sistema:
+
+* Consulta os investidores que acompanham a moeda
+* Atualiza a propriedade `ultima_notificacao` no relacionamento
+
+Consulta utilizada:
 
 ```cypher
-MATCH (i:Investidor)-[:ACOMPANHA]->(m:Moeda {codigo:$codigo})
+MATCH (i:Investidor)-[r:ACOMPANHA]->(m:Moeda {codigo:$codigo})
+SET r.ultima_notificacao = datetime()
 RETURN i.nome AS nome
 ```
 
 ---
 
-## 👥 Investidores Simulados
+#  Investidores Simulados
 
 Criados automaticamente no setup inicial:
-
-* João
-* Ana
-* Carlos
-
-Relacionamentos:
 
 * João → BTCUSDT
 * Ana → ETHUSDT
@@ -151,15 +196,18 @@ Relacionamentos:
 
 ---
 
-## 📊 Lógica de Volatilidade (Bônus Implementado)
+#  Lógica de Volatilidade
 
-O sistema compara o preço atual com o último preço armazenado em memória e exibe:
+O sistema compara o preço atual com o último preço armazenado em memória.
 
-* 🟢 Subiu
-* 🔴 Caiu
-* ⚪ Estável
+Retornos possíveis:
 
-Exemplo de log:
+* 🟢 Subiu → Notifica investidores
+* 🔴 Caiu → Notifica investidores
+* ⚪ Estável → Não notifica
+* ⚪ Primeira coleta → Não notifica
+
+Exemplo:
 
 ```
 BTCUSDT: $ 65000.00 🟢 (Subiu)
@@ -169,19 +217,70 @@ BTCUSDT: $ 65000.00 🟢 (Subiu)
 
 ---
 
-## 🐳 Como Executar o Projeto
+# 🐳 Como Executar o Projeto
 
-### 1️⃣ Subir os containers
+## ⚠️ IMPORTANTE — Versão do Python
+
+Este projeto deve ser executado com:
+
+```
+Python 3.11 ou inferior
+```
+
+### ❗ Motivo
+
+O pacote `cassandra-driver` (utilizado pelo ScyllaDB) não é compatível com Python 3.12+, pois o módulo `asyncore` foi removido nessa versão.
+
+Se utilizar Python 3.12+, ocorrerá erro:
+
+```
+cassandra.DependencyException:
+Unable to import asyncore module
+```
+
+---
+
+## 🔎 Verificar versão do Python
+
+```bash
+python --version
+```
+
+---
+
+## 🧪 Criar ambiente virtual (recomendado)
+
+```bash
+python3.11 -m venv venv
+```
+
+Ativar:
+
+**Windows**
+
+```bash
+venv_nosql\Scripts\activate
+```
+
+**Linux/Mac**
+
+```bash
+source venv_nosql/bin/activate
+```
+
+---
+
+## 1️⃣ Subir containers
 
 ```bash
 docker-compose up -d
 ```
 
-Aguarde todos os bancos inicializarem.
+Aguarde todos os serviços inicializarem.
 
 ---
 
-### 2️⃣ Instalar dependências
+## 2️⃣ Instalar dependências
 
 ```bash
 pip install -r requirements.txt
@@ -189,13 +288,17 @@ pip install -r requirements.txt
 
 ---
 
-### 3️⃣ Executar o monitor
+## 3️⃣ Executar o monitor
 
 ```bash
 python monitor.py
 ```
 
-Para encerrar:
+---
+
+## ⛔ Encerrar o sistema
+
+Pressione:
 
 ```
 CTRL + C
@@ -203,7 +306,7 @@ CTRL + C
 
 ---
 
-## 📦 Estrutura do Repositório
+# 📦 Estrutura do Repositório
 
 ```
 📁 projeto-nosql/
@@ -214,3 +317,4 @@ CTRL + C
 └── README.md
 ```
 
+---
