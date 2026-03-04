@@ -160,7 +160,8 @@ try:
 
             if preco_cache:
                 print("[REDIS] Cache Hit!")
-                preco_atual = float(preco_cache)
+                print("-" * 50)
+                continue
             else:
                 print("[REDIS] Cache Miss! Consultando API..")
 
@@ -191,34 +192,20 @@ try:
                 except Exception as e:
                     print("[SCYLLA] Erro ao inserir:", e)
 
-            # try:
-            #     with driver.session() as session_neo:
-            #         result = session_neo.run("""
-            #             MATCH (i:Investidor)-[:ACOMPANHA]->(m:Moeda {codigo:$codigo})
-            #             RETURN i.nome AS nome
-            #         """, codigo = SYMBOL)
-
-            #         investidores = [r["nome"] for r in result]
-
-            #         if investidores:
-            #             print(f"[NEO4J] Notificar: {','.join(investidores)}")
-            # except Exception as e:
-            #     print("[NEO4J] Erro ao tentar localizar investidores:", e)
-
-            # Lógica visual da volatilidade
-            if SYMBOL not in ultimos_precos:
-                indicador = "⚪ (Primeira coleta)"
-                ocorreu_variacao = False
-            else:
-                if preco_atual > ultimos_precos[SYMBOL]:
-                    indicador = "🟢 (Subiu)"
-                    ocorreu_variacao = True
-                elif preco_atual < ultimos_precos[SYMBOL]:
-                    indicador = "🔴 (Caiu)"
-                    ocorreu_variacao = True
-                else:
-                    indicador = "⚪ (Estável)"
+                # Lógica visual da volatilidade
+                if SYMBOL not in ultimos_precos:
+                    indicador = "⚪ (Primeira coleta)"
                     ocorreu_variacao = False
+                else:
+                    if preco_atual > ultimos_precos[SYMBOL]:
+                        indicador = "🟢 (Subiu)"
+                        ocorreu_variacao = True
+                    elif preco_atual < ultimos_precos[SYMBOL]:
+                        indicador = "🔴 (Caiu)"
+                        ocorreu_variacao = True
+                    else:
+                        indicador = "⚪ (Estável)"
+                        ocorreu_variacao = False
 
             ultimos_precos[SYMBOL] = preco_atual
 
@@ -231,7 +218,8 @@ try:
                 try:
                     with driver.session() as session_neo:
                         result = session_neo.run("""
-                            MATCH (i:Investidor)-[:ACOMPANHA]->(m:Moeda {codigo:$codigo})
+                            MATCH (i:Investidor)-[r:ACOMPANHA]->(m:Moeda {codigo:$codigo})
+                            SET r.ultima_notificação = datetime()
                             RETURN i.nome AS nome""", codigo=SYMBOL)
                         
                         investidores = [registro["nome"] for registro in result]
