@@ -1,4 +1,4 @@
-#  Plataforma de Inteligência de Mercado em Tempo Real
+#  Monitoramento de criptomoedas em tempo real
 
 ##  Ecossistema NoSQL com Persistência Poliglota
 
